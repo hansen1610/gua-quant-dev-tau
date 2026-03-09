@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #020609;
+  --foreground: #f8fafc;
+  --panel: rgba(13, 17, 23, 0.7);
+  --primary: #2DD4BF;
+  --primary-glow: rgba(45, 212, 191, 0.3);
+  --success: #10b981;
+  --danger: #f43f5e;
+  --trading-buy: #0fbc9d;
+  --trading-sell: #e11d48;
+  --radius-ios: 1.25rem;
+}
+
+@layer base {
+  * {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari and Opera */
+  }
+
+  body {
+    @apply bg-[#020609] text-slate-100 font-sans selection:bg-teal-500/30;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    position: fixed;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .panel-card {
+    @apply bg-slate-900/40 backdrop-blur-2xl border border-white/[0.05] rounded-[1.5rem] shadow-2xl transition-all duration-300;
+  }
+
+  .glass-button {
+    @apply relative overflow-hidden inline-flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .ios-button-primary {
+    @apply glass-button bg-white text-black font-bold px-6 py-3 rounded-[1.25rem] hover:bg-slate-100;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .ios-button-secondary {
+    @apply glass-button bg-white/10 backdrop-blur-md border border-white/10 text-white font-semibold px-6 py-3 rounded-[1.25rem] hover:bg-white/15;
+  }
+
+  .ios-button-danger {
+    @apply glass-button bg-rose-500 text-white font-bold px-6 py-3 rounded-[1.25rem] hover:bg-rose-600;
+    box-shadow: 0 8px 30px rgba(244, 63, 94, 0.3);
+  }
+
+  .trading-button-buy {
+    @apply glass-button bg-[#0fbc9d] text-white font-black py-4 rounded-2xl shadow-xl transition-all duration-300 active:scale-95 hover:scale-[1.02] hover:bg-[#12d3af];
+    box-shadow: 0 10px 25px -5px rgba(15, 188, 157, 0.3);
+  }
+
+  .trading-button-buy:hover {
+    box-shadow: 0 20px 40px -5px rgba(15, 188, 157, 0.5);
+  }
+
+  .trading-button-sell {
+    @apply glass-button bg-[#e11d48] text-white font-black py-4 rounded-2xl shadow-xl transition-all duration-300 active:scale-95 hover:scale-[1.02] hover:bg-[#f43f5e];
+    box-shadow: 0 10px 25px -5px rgba(225, 29, 72, 0.3);
+  }
+
+  .trading-button-sell:hover {
+    box-shadow: 0 20px 40px -5px rgba(225, 29, 72, 0.5);
+  }
+
+  .btn-telemetry {
+    @apply glass-button bg-slate-800/80 border border-white/10 text-slate-300 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 hover:text-white transition-all;
+  }
+
+  .btn-apply-params {
+    @apply glass-button bg-teal-500 text-slate-900 px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-teal-400 transition-all shadow-lg;
+    box-shadow: 0 4px 15px rgba(45, 212, 191, 0.4);
+  }
+
+  .btn-initiate-sim {
+    @apply glass-button bg-indigo-600 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-[0.15em] hover:bg-indigo-500 transition-all shadow-xl;
+    box-shadow: 0 10px 25px rgba(79, 70, 229, 0.4);
+  }
+
+  .btn-refresh-history {
+    @apply glass-button w-10 h-10 rounded-full bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 hover:text-white transition-all shadow-lg;
+  }
+
+  .ios-input {
+    @apply bg-slate-800/50 backdrop-blur-md border border-white/10 rounded-[1rem] px-4 py-3 text-sm focus:border-teal-400 focus:ring-1 focus:ring-teal-400/30 outline-none transition-all;
+  }
+
+  .ios-slider {
+    @apply h-1.5 bg-slate-800 rounded-full appearance-none cursor-pointer;
+  }
+
+  .ios-slider::-webkit-slider-thumb {
+    @apply appearance-none w-6 h-6 bg-white rounded-full shadow-xl border-4 border-teal-500 transition-transform active:scale-125;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    @apply w-1;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full hover:bg-white/20;
+  }
+
+  .mono-number {
+    @apply font-mono tracking-tight tabular-nums;
+  }
+
+  .glow-text-success {
+    @apply text-emerald-400 drop-shadow-[0_0_8px_rgba(52, 211, 153, 0.4)];
+  }
+
+  .glow-text-danger {
+    @apply text-rose-400 drop-shadow-[0_0_8px_rgba(251, 113, 133, 0.4)];
+  }
+}
+
+.animate-ios-fade-in {
+  animation: iosFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes iosFade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bg-grid-white {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}

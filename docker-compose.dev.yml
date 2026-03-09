@@ -1,0 +1,131 @@
+# ════════════════════════════════════════════════════════════════
+#  QuantBot Infra — Local Development Orchestration
+#  Spins up core DB + Backend + Next.js (Live Reload)
+# ════════════════════════════════════════════════════════════════
+version: '3.8'
+
+networks:
+  quantbot-dev-net:
+    driver: bridge
+
+volumes:
+  pgdata-dev:
+  redis-data-dev:
+
+
+services:
+  # ── Backend API ──
+  backend-api:
+    build: ./services/backend-api
+    command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
+    volumes:
+      - ./services/backend-api:/app
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PASSWORD=dev_pass
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=dev_redis_pass
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8080:8000"
+    networks:
+      - quantbot-dev-net
+
+  # ── Next.js Frontend ──
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    # Overrides production CMD and runs in dev mode with live reload
+    command: [ "npm", "run", "dev" ]
+    volumes:
+      - ./services/frontend:/app
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - backend-api
+    ports:
+      - "3000:3000"
+    networks:
+      - quantbot-dev-net
+
+  # ── PostgreSQL ──
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=quantbot
+      - POSTGRES_USER=quantbot_user
+      - POSTGRES_PASSWORD=dev_pass
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+      - ./services/database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - quantbot-dev-net
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass dev_redis_pass
+    volumes:
+      - redis-data-dev:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - quantbot-dev-net
+
+  # ── Strategy Engine ──
+  strategy-engine:
+    build: ./services/strategy-engine
+    volumes:
+      - ./services/strategy-engine:/app
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PASSWORD=dev_pass
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=dev_redis_pass
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - quantbot-dev-net
+
+  # ── ML Engine ──
+  ml-engine:
+    build: ./services/ml-engine
+    volumes:
+      - ./services/ml-engine:/app
+    env_file: .env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PASSWORD=dev_pass
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=dev_redis_pass
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - quantbot-dev-net
+
+  # ── Market Streamer (Simulation) ──
+  market-streamer:
+    build:
+      context: ./services/monitoring
+      dockerfile: Dockerfile
+    command: [ "python", "streamer.py" ]
+    volumes:
+      - ./services/monitoring:/app
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=dev_redis_pass
+    depends_on:
+      - redis
+    networks:
+      - quantbot-dev-net
