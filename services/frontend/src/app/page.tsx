@@ -44,6 +44,7 @@ interface Strategy {
 
 interface RiskMetrics {
     equity: number;
+    available: number;
     daily_pnl: number;
     drawdown_pct: number;
     exposure_pct: number;
@@ -78,7 +79,7 @@ const ALL_TIMEFRAMES = [
 interface Toast {
     id: number;
     message: string;
-    type: 'success' | 'error' | 'info' | 'warning';
+    type: 'success' | 'error' | 'info' | 'warning' | 'buy' | 'sell';
 }
 
 // ── API Helpers ────────────────────────────────────────────
@@ -106,7 +107,9 @@ function ToastNotification({ toast, onRemove }: { toast: Toast; onRemove: (id: n
         success: 'bg-success/20 text-success border-success/30',
         error: 'bg-danger/20 text-danger border-danger/30',
         info: 'bg-primary/20 text-primary border-primary/30',
-        warning: 'bg-warning/20 text-warning border-warning/30'
+        warning: 'bg-warning/20 text-warning border-warning/30',
+        buy: 'bg-[#0fbc9d]/20 text-[#0fbc9d] border-[#0fbc9d]/30',
+        sell: 'bg-[#e11d48]/20 text-[#e11d48] border-[#e11d48]/30'
     };
 
     return (
@@ -160,7 +163,7 @@ async function apiPatch(path: string, body: any) {
 // ── Main Component ─────────────────────────────────────────
 export default function Home() {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const [metrics, setMetrics] = useState<RiskMetrics>({ equity: 0, daily_pnl: 0, drawdown_pct: 0, exposure_pct: 0 });
+    const [metrics, setMetrics] = useState<RiskMetrics>({ equity: 0, available: 0, daily_pnl: 0, drawdown_pct: 0, exposure_pct: 0 });
     const [positions, setPositions] = useState<Position[]>([]);
     const [strategies, setStrategies] = useState<Strategy[]>([]);
     const [serviceHealth, setServiceHealth] = useState<Record<string, string>>({});
@@ -266,10 +269,10 @@ export default function Home() {
         loadInitial();
     }, [user]);
 
-    // ── WebSocket Connection (post-auth) ──
     useEffect(() => {
         if (!user) return;
-        const wsUrl = API_URL.replace('http', 'ws') + '/ws/dashboard';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/dashboard`;
         let reconnectTimer: ReturnType<typeof setTimeout>;
         let pingInterval: ReturnType<typeof setInterval>;
         let isIntentionallyClosed = false;
@@ -301,6 +304,7 @@ export default function Home() {
                         case 'equity_update':
                             setMetrics(prev => ({
                                 equity: msg.data.equity || prev.equity,
+                                available: msg.data.available || prev.available,
                                 daily_pnl: msg.data.daily_pnl || prev.daily_pnl,
                                 drawdown_pct: msg.data.drawdown_pct || prev.drawdown_pct,
                                 exposure_pct: msg.data.margin_used && msg.data.equity
@@ -630,7 +634,7 @@ export default function Home() {
                                     </div>
                                 </div>
                                 <div className="w-full h-full relative" ref={chartContainerRef}>
-                                    <TradingChart symbol={selectedSymbol} timeframe={selectedTimeframe} onPriceUpdate={setCurrentPrice} containerRef={chartContainerRef} />
+                                    <TradingChart symbol={selectedSymbol} timeframe={selectedTimeframe} onPriceUpdate={setCurrentPrice} containerRef={chartContainerRef} positions={positions} />
                                 </div>
                             </div>
 
@@ -750,11 +754,12 @@ export default function Home() {
 }
 
 // ── TradingView Lightweight Chart Component ─────────────────
-function TradingChart({ symbol, timeframe = '15m', onPriceUpdate, containerRef }: { symbol: string, timeframe?: string, onPriceUpdate?: (price: number) => void, containerRef: React.RefObject<HTMLDivElement> }) {
+function TradingChart({ symbol, timeframe = '15m', onPriceUpdate, containerRef, positions = [] }: { symbol: string, timeframe?: string, onPriceUpdate?: (price: number) => void, containerRef: React.RefObject<HTMLDivElement>, positions?: Position[] }) {
     const chartRef = useRef<any>(null);
     const candleSeriesRef = useRef<any>(null);
     const ema21Ref = useRef<any>(null);
     const ema90Ref = useRef<any>(null);
+    const priceLinesRef = useRef<any[]>([]);
     const [isChartReady, setIsChartReady] = useState(false);
 
     // Initial Chart Creation
@@ -886,6 +891,39 @@ function TradingChart({ symbol, timeframe = '15m', onPriceUpdate, containerRef }
             clearInterval(interval);
         };
     }, [symbol, timeframe, isChartReady]);
+
+    useEffect(() => {
+        if (!candleSeriesRef.current || !isChartReady) return;
+
+        // Clean up old price lines
+        if (priceLinesRef.current) {
+            priceLinesRef.current.forEach((line: any) => {
+                try {
+                    candleSeriesRef.current.removePriceLine(line);
+                } catch (e) { }
+            });
+        }
+        priceLinesRef.current = [];
+
+        // Draw active positions
+        positions.forEach(pos => {
+            if (pos.symbol === symbol && pos.entry_price) {
+                const isLong = pos.side.toUpperCase() === 'LONG' || pos.side.toUpperCase() === 'BUY';
+                const color = isLong ? '#00ff9d' : '#e11d48';
+                const label = `${isLong ? 'Long' : 'Short'} ${pos.size}`;
+
+                const pl = candleSeriesRef.current.createPriceLine({
+                    price: pos.entry_price,
+                    color: color,
+                    lineWidth: 1,
+                    lineStyle: 2, // 2 = Dashed
+                    axisLabelVisible: true,
+                    title: label,
+                });
+                priceLinesRef.current.push(pl);
+            }
+        });
+    }, [positions, symbol, isChartReady]);
 
     return <div ref={containerRef} className="w-full h-full" />;
 }
@@ -1024,7 +1062,20 @@ function OrderEntry({ symbol, balance, currentPrice, addToast }: { symbol: strin
                 size: parseFloat(amount),
                 price: type === 'LIMIT' ? parseFloat(price) : null
             });
-            addToast(`Transmitted: ${side} ${amount} ${asset}`, 'success');
+
+            // Audio Feedback Upgrade
+            try {
+                const audioUrl = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU5LjI3LjEwMAAAAAAAAAAAAAAA//NIxAAAAAAAAAAAAASW5mbwAAAA8AAAAFAAAARgBfX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19f//NIxAAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NIxDYAAANIAAAAAKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NIxHMAAANIAAAAAKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NIxK8AAANIAAAAAKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+                const audio = new Audio(audioUrl);
+                audio.volume = 0.5;
+                audio.play().catch(() => { });
+            } catch (aErr) { }
+
+            // Visual Toast Upgrade
+            const actionIcon = side === 'BUY' ? '🟢' : '🔴';
+            const actionText = `${actionIcon} ${type} ${side}: ${amount} ${asset}`;
+
+            addToast(actionText, side === 'BUY' ? 'buy' : 'sell');
             setAmount('');
             setPercent(0);
         } catch (e) {

@@ -14,12 +14,12 @@ volumes:
 
 
 services:
-  # ── Backend API ──
-  backend-api:
-    build: ./services/backend-api
+  # ── Core Engine ──
+  core-engine:
+    build: ./services/core-engine
     command: [ "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload" ]
     volumes:
-      - ./services/backend-api:/app
+      - ./services/core-engine:/app
     env_file: .env
     environment:
       - POSTGRES_HOST=postgres
@@ -48,7 +48,7 @@ services:
       - NODE_ENV=development
       - NEXT_PUBLIC_API_URL=http://localhost:8080
     depends_on:
-      - backend-api
+      - core-engine
     ports:
       - "3000:3000"
     networks:
@@ -80,23 +80,6 @@ services:
     networks:
       - quantbot-dev-net
 
-  # ── Strategy Engine ──
-  strategy-engine:
-    build: ./services/strategy-engine
-    volumes:
-      - ./services/strategy-engine:/app
-    env_file: .env
-    environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PASSWORD=dev_pass
-      - REDIS_HOST=redis
-      - REDIS_PASSWORD=dev_redis_pass
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - quantbot-dev-net
-
   # ── ML Engine ──
   ml-engine:
     build: ./services/ml-engine
@@ -117,11 +100,11 @@ services:
   # ── Market Streamer (Simulation) ──
   market-streamer:
     build:
-      context: ./services/monitoring
+      context: ./services/core-engine
       dockerfile: Dockerfile
     command: [ "python", "streamer.py" ]
     volumes:
-      - ./services/monitoring:/app
+      - ./services/core-engine:/app
     environment:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=dev_redis_pass

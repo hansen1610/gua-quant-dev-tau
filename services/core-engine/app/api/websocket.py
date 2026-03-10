@@ -132,10 +132,27 @@ async def _stream_dashboard_data(websocket: WebSocket, redis, db):
                             "take_profit": float(p["take_profit"]) if p["take_profit"] else None,
                         })
             else:
-                pos_list = [
-                    {"id": "m1", "symbol": "BTC-USD", "side": "long", "size": 0.5, "entry_price": 63000, "current_price": 63500 + random.random()*100, "unrealized_pnl": 250, "stop_loss": 60000, "take_profit": 70000},
-                    {"id": "m2", "symbol": "ETH-USD", "side": "short", "size": 5.0, "entry_price": 3500, "current_price": 3450 - random.random()*10, "unrealized_pnl": 250, "stop_loss": 3600, "take_profit": 3200}
-                ]
+                if redis:
+                    try:
+                        import json
+                        import random
+                        demo_positions = await redis.hgetall("demo:positions")
+                        for k, v in demo_positions.items():
+                            p = json.loads(v)
+                            # Add some random flutter to current price to make PnL move
+                            flutter = (random.random() - 0.5) * 10
+                            p["current_price"] = p["entry_price"] + flutter
+                            multiplier = 1 if p["side"].lower() in ["buy", "long"] else -1
+                            p["unrealized_pnl"] = (p["current_price"] - p["entry_price"]) * p["size"] * multiplier
+                            pos_list.append(p)
+                    except Exception as e:
+                        logger.error("ws.demo_positions_error", error=str(e))
+                        
+                if not pos_list:
+                    pos_list = [
+                        {"id": "m1", "symbol": "BTC-USD", "side": "long", "size": 0.5, "entry_price": 63000, "current_price": 63500 + random.random()*100, "unrealized_pnl": 250, "stop_loss": 60000, "take_profit": 70000},
+                        {"id": "m2", "symbol": "ETH-USD", "side": "short", "size": 5.0, "entry_price": 3500, "current_price": 3450 - random.random()*10, "unrealized_pnl": 250, "stop_loss": 3600, "take_profit": 3200}
+                    ]
             
             await websocket.send_json({ "type": "positions_update", "data": pos_list })
 

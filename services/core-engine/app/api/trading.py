@@ -12,22 +12,37 @@ router = APIRouter()
 async def get_positions(request: Request):
     """Get all active trading positions."""
     db = request.app.state.pool
-    if not db:
-        # Integrated Live Price Sync for Demo/Dev Mode
-        import httpx
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post("https://api.hyperliquid.xyz/info", json={"type": "allMids"}, timeout=2.0)
-                mids = resp.json()
-                btc_price = float(mids.get("BTC", 70000))
-                eth_price = float(mids.get("ETH", 3500))
-        except:
-            btc_price, eth_price = 70000, 3500
-
-        return {"positions": [
-            {"id": "mock-1", "symbol": "BTC-USD", "side": "long", "size": 0.5, "entry_price": btc_price - 1500, "current_price": btc_price, "unrealized_pnl": 750, "stop_loss": btc_price-3000, "take_profit": btc_price+5000},
-            {"id": "mock-2", "symbol": "ETH-USD", "side": "short", "size": 10.0, "entry_price": eth_price + 80, "current_price": eth_price, "unrealized_pnl": 800, "stop_loss": eth_price+200, "take_profit": eth_price-400}
-        ]}
+    redis = request.app.state.redis
+    demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
+    
+    if demo_mode or not db:
+        pos_list = []
+        if redis:
+            try:
+                import json
+                demo_positions = await redis.hgetall("demo:positions")
+                for k, v in demo_positions.items():
+                    pos_list.append(json.loads(v))
+            except Exception as e:
+                logger.error("api.demo_positions_error", error=str(e))
+                
+        if not pos_list:
+            import httpx
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post("https://api.hyperliquid.xyz/info", json={"type": "allMids"}, timeout=2.0)
+                    mids = resp.json()
+                    btc_price = float(mids.get("BTC", 70000))
+                    eth_price = float(mids.get("ETH", 3500))
+            except:
+                btc_price, eth_price = 70000, 3500
+    
+            pos_list = [
+                {"id": "mock-1", "symbol": "BTC-USD", "side": "long", "size": 0.5, "entry_price": btc_price - 1500, "current_price": btc_price, "unrealized_pnl": 750, "stop_loss": btc_price-3000, "take_profit": btc_price+5000},
+                {"id": "mock-2", "symbol": "ETH-USD", "side": "short", "size": 10.0, "entry_price": eth_price + 80, "current_price": eth_price, "unrealized_pnl": 800, "stop_loss": eth_price+200, "take_profit": eth_price-400}
+            ]
+        return {"positions": pos_list}
+        
     try:
         async with db.acquire() as conn:
             records = await conn.fetch("SELECT * FROM positions WHERE status = 'open' ORDER BY opened_at DESC")
@@ -192,9 +207,39 @@ async def place_order(request: Request):
         }
         
         demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
-        if not redis or demo_mode:
+        if demo_mode:
             logger.info("api.manual_order_demo", symbol=symbol, side=side)
+            if redis:
+                import uuid
+                import json
+                
+                entry_price = float(price) if price else 70000.0
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.post("https://api.hyperliquid.xyz/info", json={"type": "allMids"}, timeout=1.0)
+                        entry_price = float(resp.json().get(symbol.split('-')[0], entry_price))
+                except:
+                    pass
+                    
+                pos_id = f"demo-{str(uuid.uuid4())[:8]}"
+                mock_pos = {
+                    "id": pos_id,
+                    "symbol": symbol,
+                    "side": side.lower(),
+                    "size": float(size),
+                    "entry_price": entry_price,
+                    "current_price": entry_price,
+                    "unrealized_pnl": 0.0,
+                    "stop_loss": entry_price * 0.95 if side.lower() in ['buy', 'long'] else entry_price * 1.05,
+                    "take_profit": entry_price * 1.05 if side.lower() in ['buy', 'long'] else entry_price * 0.95
+                }
+                await redis.hset("demo:positions", pos_id, json.dumps(mock_pos))
+
             return {"status": "success", "message": f"[DEMO] Manual {side} order for {size} {symbol} simulated."}
+
+        if not redis:
+            raise Exception("Redis not connected for live order routing")
 
         import json
         await redis.publish("signals:execute", json.dumps(signal))

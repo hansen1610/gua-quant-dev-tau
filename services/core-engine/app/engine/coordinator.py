@@ -1,52 +1,28 @@
-"""
-╔══════════════════════════════════════════════════════════════╗
-║  Strategy Engine - Main Service                              ║
-║  Coordinates strategies, risk engine, and signal publishing  ║
-╚══════════════════════════════════════════════════════════════╝
-"""
 import asyncio
 import os
-import signal
 import time
 from typing import Dict
 
-import asyncpg
-import redis.asyncio as aioredis
 import structlog
-from dotenv import load_dotenv
 
-from risk_engine import InstitutionalRiskEngine
-from strategies.ema_trend import EMATrendStrategy
-from strategies.fibonacci_pullback import FibonacciPullbackStrategy
+from app.engine.risk_engine import InstitutionalRiskEngine
+from app.strategies.ema_trend import EMATrendStrategy
+from app.strategies.fibonacci_pullback import FibonacciPullbackStrategy
 
-load_dotenv()
 logger = structlog.get_logger()
 
 class StrategyCoordinator:
-    def __init__(self):
-        self.redis = None
-        self.db_pool = None
+    def __init__(self, db_pool, redis_client):
+        self.db_pool = db_pool
+        self.redis = redis_client
         self.risk_engine = InstitutionalRiskEngine()
+        self.risk_engine.set_redis(self.redis)
+        self.risk_engine.set_db(self.db_pool)
         self.strategies = {}
         self._running = False
         
     async def start(self):
         logger.info("strategy_engine.starting")
-        self.redis = aioredis.Redis(
-            host=os.getenv("REDIS_HOST", "redis"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_PASSWORD", ""),
-            decode_responses=True,
-        )
-        self.db_pool = await asyncpg.create_pool(
-            host=os.getenv("POSTGRES_HOST", "postgres"),
-            port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "quantbot"),
-            user=os.getenv("POSTGRES_USER", "quantbot_user"),
-            password=os.getenv("POSTGRES_PASSWORD", ""),
-        )
-        self.risk_engine.set_redis(self.redis)
-        self.risk_engine.set_db(self.db_pool)
         
         # Load active strategies
         await self._load_strategies()
@@ -62,10 +38,6 @@ class StrategyCoordinator:
     async def stop(self):
         logger.info("strategy_engine.stopping")
         self._running = False
-        if self.redis:
-            await self.redis.close()
-        if self.db_pool:
-            await self.db_pool.close()
 
     async def _load_strategies(self):
         """Load strategies from database"""
@@ -83,8 +55,8 @@ class StrategyCoordinator:
                 
         logger.info("strategy_engine.loaded", count=len(self.strategies))
         # Report health/ready status
-        await self.redis.set("service:strategy-engine:status", "running")
-        await self.redis.set("service:strategy-engine:last_heartbeat", int(time.time()))
+        await self.redis.set("service:core-engine:status", "running")
+        await self.redis.set("service:core-engine:last_heartbeat", int(time.time()))
 
     async def _market_data_listener(self):
         """Listen to market data from Redis (populated by Hummingbot)"""
@@ -116,7 +88,7 @@ class StrategyCoordinator:
                 except Exception as e:
                     logger.error("strategy_engine.eval_error", strategy_id=strat_id, error=str(e))
             # Heartbeat
-            await self.redis.set("service:strategy-engine:last_heartbeat", int(time.time()))
+            await self.redis.set("service:core-engine:last_heartbeat", int(time.time()))
             await asyncio.sleep(5)  # Evaluate every 5 seconds
 
     async def _publish_signal(self, signal: dict):
@@ -124,20 +96,3 @@ class StrategyCoordinator:
         import orjson
         await self.redis.publish("signals:execute", orjson.dumps(signal).decode())
         logger.info("strategy_engine.signal_published", signal=signal)
-
-async def main():
-    coordinator = StrategyCoordinator()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, lambda: asyncio.create_task(coordinator.stop()))
-        except NotImplementedError:
-            pass
-            
-    try:
-        await coordinator.start()
-    except KeyboardInterrupt:
-        await coordinator.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
