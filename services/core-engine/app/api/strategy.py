@@ -41,7 +41,7 @@ MOCK_STRATEGIES = [
 @router.get("/")
 async def list_strategies(request: Request):
     """List all deployed strategies and their statuses."""
-    db = request.app.state.pool
+    db = request.app.state.db_pool
     if not db:
         return {"strategies": MOCK_STRATEGIES}
         
@@ -56,8 +56,8 @@ async def list_strategies(request: Request):
 @router.patch("/{strategy_id}/parameters")
 async def update_strategy_parameters(strategy_id: str, data: dict, request: Request):
     """Update strategy risk/reward parameters (Risk, TP, SL, MaxDD)."""
-    db = request.app.state.pool
-    redis = request.app.state.redis
+    db = request.app.state.db_pool
+    redis = request.app.state.redis_client_client
     
     # Extract values
     risk = data.get("risk_per_trade")
@@ -105,8 +105,8 @@ async def update_strategy_parameters(strategy_id: str, data: dict, request: Requ
 @router.post("/{strategy_id}/toggle")
 async def toggle_strategy(strategy_id: str, request: Request):
     """Enable or disable a specific algorithm module."""
-    db = request.app.state.pool
-    redis = request.app.state.redis
+    db = request.app.state.db_pool
+    redis = request.app.state.redis_client_client
     
     if not db:
         # Simulate toggle for mock data

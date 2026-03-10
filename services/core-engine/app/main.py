@@ -91,11 +91,11 @@ async def health():
     return {"status": "ok", "service": "core-engine"}
 
 # Register routers
-app.include_router(auth_router)
-app.include_router(trading_router)
-app.include_router(strategy_router)
-app.include_router(risk_router)
-app.include_router(research_router)
+app.include_router(auth_router, prefix="/api/auth")
+app.include_router(trading_router, prefix="/api/trading")
+app.include_router(strategy_router, prefix="/api/strategy")
+app.include_router(risk_router, prefix="/api/risk")
+app.include_router(research_router, prefix="/api/research")
 app.include_router(websocket_router)
 app.include_router(health_router)
 

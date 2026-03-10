@@ -34,7 +34,7 @@ async def login(payload: dict, request: Request):
             detail="Username and password are required",
         )
 
-    db = request.app.state.pool
+    db = request.app.state.db_pool
     
     # Try database login first if DB is available
     if db:

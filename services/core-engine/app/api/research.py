@@ -8,7 +8,7 @@ router = APIRouter()
 @router.get("/metrics/{symbol}")
 async def get_symbol_metrics(symbol: str, request: Request):
     """Retrieve robust analytics for a trading algorithm / market symbol via caching."""
-    redis = request.app.state.redis
+    redis = request.app.state.redis_client_client
     import os
     demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
     
@@ -52,7 +52,7 @@ async def get_symbol_metrics(symbol: str, request: Request):
 @router.post("/run_backtest")
 async def queue_backtest(params: dict, request: Request):
     """Queue a heavy simulated backtest on Quant Research Lab queue via Redis."""
-    redis = request.app.state.redis
+    redis = request.app.state.redis_client_client
     try:
         import json
         await redis.lpush("jobs:quant-research:backtest", json.dumps(params))

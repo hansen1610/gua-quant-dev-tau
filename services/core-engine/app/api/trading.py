@@ -11,8 +11,8 @@ router = APIRouter()
 @router.get("/positions")
 async def get_positions(request: Request):
     """Get all active trading positions."""
-    db = request.app.state.pool
-    redis = request.app.state.redis
+    db = request.app.state.db_pool
+    redis = request.app.state.redis_client_client
     demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
     
     if demo_mode or not db:
@@ -54,7 +54,7 @@ async def get_positions(request: Request):
 @router.get("/history")
 async def get_trade_history(request: Request, limit: int = 50):
     """Get filled trade history."""
-    db = request.app.state.pool
+    db = request.app.state.db_pool
     import os
     demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
     
@@ -92,7 +92,7 @@ async def get_trade_history(request: Request, limit: int = 50):
 @router.get("/candles/{symbol}")
 async def get_candles(symbol: str, request: Request, timeframe: str = "15m", limit: int = 100):
     """Get OHLC candle data for professional charting."""
-    db = request.app.state.pool
+    db = request.app.state.db_pool
     try:
         if not db: raise Exception("No DB Connection")
         async with db.acquire() as conn:
@@ -183,7 +183,7 @@ async def get_candles(symbol: str, request: Request, timeframe: str = "15m", lim
 async def place_order(request: Request):
     """Execute a manual trade from the trading floor."""
     data = await request.json()
-    redis = request.app.state.redis
+    redis = request.app.state.redis_client_client
     
     symbol = data.get("symbol")
     side = data.get("side") # buy/sell
@@ -253,7 +253,7 @@ async def place_order(request: Request):
 @router.post("/emergency_stop")
 async def trigger_emergency_stop(request: Request):
     """Liquidate all positions immediately and halt strategies."""
-    redis = request.app.state.redis
+    redis = request.app.state.redis_client_client
     logger.critical("api.emergency_stop_triggered")
     
     demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"

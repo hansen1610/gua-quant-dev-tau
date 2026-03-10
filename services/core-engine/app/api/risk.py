@@ -8,8 +8,8 @@ router = APIRouter()
 @router.get("/metrics")
 async def get_dashboard_metrics(request: Request):
     """Get Top Bar KPIs (Equity, Daily PnL, Drawdown, Exposure)"""
-    redis = request.app.state.redis
-    db = request.app.state.pool
+    redis = request.app.state.redis_client_client
+    db = request.app.state.db_pool
     
     # ── Fallback Values (Simulation/Demo Mode) ──
     demo_mode = os.getenv("DEMO_MODE", "true").lower() == "true" # Default to true for better UX if no data
@@ -57,7 +57,7 @@ async def get_dashboard_metrics(request: Request):
 async def update_risk_settings(request: Request):
     """Update risk management parameters (e.g. kill switches, limits)"""
     data = await request.json()
-    redis = request.app.state.redis
+    redis = request.app.state.redis_client_client
     
     try:
         # 1. Update individual key-value pairs for quick access

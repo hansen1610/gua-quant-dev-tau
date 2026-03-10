@@ -12,7 +12,7 @@ router = APIRouter()
 async def get_all_service_health(request: Request):
     """Get health status of all monitored services."""
     results = {}
-    redis_client = request.app.state.redis_client
+    redis = request.app.state.redis_client_client
     for service_name, config in MONITORED_SERVICES.items():
         results[service_name] = await check_service_health(redis_client, service_name, config)
     return {"services": results, "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -21,7 +21,7 @@ async def get_all_service_health(request: Request):
 @router.get("/api/monitoring/system")
 async def get_system_metrics(request: Request):
     """Get aggregated system metrics from Redis cache."""
-    redis_client = request.app.state.redis_client
+    redis = request.app.state.redis_client_client
     try:
         # Account data
         account = await redis_client.hgetall("account:balance") or {}
