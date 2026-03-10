@@ -6,7 +6,7 @@
 """
 from typing import List
 import pandas as pd
-from strategies.base_strategy import BaseStrategy
+from app.strategies.base_strategy import BaseStrategy
 
 class MultiTimeframeStrategy(BaseStrategy):
     def __init__(self, config: dict):

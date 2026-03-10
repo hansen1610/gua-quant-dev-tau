@@ -6,7 +6,7 @@
 """
 import pandas as pd
 from typing import List
-from strategies.base_strategy import BaseStrategy
+from app.strategies.base_strategy import BaseStrategy
 
 class VolatilityBreakoutStrategy(BaseStrategy):
     def __init__(self, config: dict):
